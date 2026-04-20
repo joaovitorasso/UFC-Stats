@@ -9,11 +9,6 @@ Pipeline simples para coletar dados do UFC Stats e carregar apenas a camada `sil
 3. `silver` (banco): carrega tabelas `silver.eventos`, `silver.lutas`, `silver.lutadores`.
 4. `silver` (banco): gera também `silver.historico_lutas` (histórico por lutador por round).
 5. `silver` (banco): mantém dimensões `silver.dim_lutador`, `silver.dim_evento`, `silver.dim_luta` e `silver.dim_bonus`.
-6. Nas tabelas de trabalho (`silver.lutadores`, `silver.eventos`, `silver.lutas`) usa chaves substitutas (`id_lutador`, `id_evento`, `id_luta`) no lugar das chaves naturais.
-
-Nao existe carga de `raw` no banco.
-Nao existe camada `gold`.
-Nao existe parte de predicao.
 
 ## Estrutura
 
