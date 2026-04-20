@@ -1,148 +1,55 @@
-# ufc-lakehouse
+# UFC Stats Pipeline (Raw -> Bronze -> Silver)
 
-Lakehouse pipeline para coleta de dados UFC e carga Raw -> Bronze -> Silver -> Gold em SQL Server (sem PySpark).
+Pipeline simples para coletar dados do UFC Stats e carregar apenas a camada `silver` no SQL Server.
 
-Fonte: `ufcstats.com` via `requests` + `BeautifulSoup`.
-O projeto salva snapshots HTML em `data/raw/html` para reprocessamento sem nova coleta.
+## Fluxo
+
+1. `raw` (arquivo): salva HTML/JSON em `data/raw`.
+2. `bronze` (arquivo): gera JSONL em `data/bronze`.
+3. `silver` (banco): carrega tabelas `silver.eventos`, `silver.lutas`, `silver.lutadores`.
+4. `silver` (banco): gera também `silver.historico_lutas` (histórico por lutador por round).
+5. `silver` (banco): mantém dimensões `silver.dim_lutador`, `silver.dim_evento`, `silver.dim_luta` e `silver.dim_bonus`.
+6. Nas tabelas de trabalho (`silver.lutadores`, `silver.eventos`, `silver.lutas`) usa chaves substitutas (`id_lutador`, `id_evento`, `id_luta`) no lugar das chaves naturais.
+
+Nao existe carga de `raw` no banco.
+Nao existe camada `gold`.
+Nao existe parte de predicao.
 
 ## Estrutura
 
-- `src/ufc_pipeline/`: codigo da aplicacao
-- `configs/`: configuracoes de fonte, pipeline e logging
-- `scripts/`: loaders e utilitarios
-- `data/`: saidas por camada (ignorada no Git)
-
-## Camadas
-
-- `RAW`: indice de eventos + HTML de eventos/lutadores + metadados
-- `BRONZE (arquivos)`: jsonl de eventos/lutas/lutadores
-- `RAW (banco)`: json bruto por linha (`raw.*_json`)
-- `BRONZE (banco)`: espelho estruturado do json (`bronze.*_raw`)
-- `SILVER (banco)`: dados curados derivados da Bronze (`silver.*`)
-- `GOLD (banco)`: metricas analiticas derivadas da Silver (`gold.*`)
-- `ETL (controle)`: estado e auditoria da pipeline (`etl.pipeline_control`, `etl.load_audit`)
+- `src/pipeline.py`: orquestracao da pipeline
+- `src/coleta.py`: coleta e parsing (eventos, lutas, lutadores)
+- `src/utils.py`: funcoes utilitarias (ids, io e parsing simples)
+- `src/silver_loader.py`: carga bronze -> silver
+- `configs/`: configuracoes
+- `data/`: arquivos locais gerados pela pipeline
 
 ## Como rodar
 
-1. Criar ambiente e instalar dependencias:
+1. Criar ambiente:
 
 ```bash
 python -m venv .venv
-source .venv/bin/activate  # Windows: .venv\Scripts\activate
-pip install -e .
-pip install -e ".[sqlserver]"  # necessario para o loader SQL Server
+.venv\Scripts\activate
+pip install -r requirements-sqlserver.txt
 ```
 
-2. Copiar `.env.example` para `.env` e ajustar variaveis, se necessario.
+2. Copiar `.env.example` para `.env` e ajustar conexao SQL Server.
 
-3. Executar pipeline:
+3. Executar coleta:
 
 ```bash
-# recomendado: script instalado do pacote
-ufc-pipeline run all
-
-# alternativa equivalente
-python -m ufc_pipeline run all
-
-# por estagio
-ufc-pipeline run raw
-ufc-pipeline run bronze
+python src\pipeline.py run all
 ```
 
-4. Carregar no SQL Server (sem PySpark):
+4. Carregar silver no SQL Server:
 
 ```bash
-python scripts/load_lakehouse_sqlserver.py --dt 2026-02-08 --data-root .\data
+python src\silver_loader.py --data-root .\data
 ```
 
-## Saidas
-
-- `data/raw/...`: snapshots e metadados (`run_id`, `dt`)
-- `data/bronze/...`: eventos, lutas e lutadores em `jsonl`
-- `data/bronze/fighters_index/...`: indice intermediario de lutadores para coleta RAW
-
-## Observacoes
-
-- O HTML do site pode mudar; por isso a camada RAW persiste snapshots.
-- Controle de taxa e timeout fica em `configs/settings.yaml`.
-- `data/` nao e versionado por padrao (`.gitignore`).
-
-## Loader SQL Server (sem PySpark)
-
-O loader oficial e em Python (pandas + ODBC):
-
-- `scripts/load_lakehouse_sqlserver.py`
-
-Fluxo implementado no banco:
-
-1. Raw: salva JSON bruto por linha em `raw.events_json`, `raw.fights_json`, `raw.fighters_json`.
-2. Bronze: espelha JSONs estruturados em `bronze.events_raw`, `bronze.fights_raw`, `bronze.fighters_raw`.
-3. Silver: criada a partir da Bronze (`silver.events`, `silver.fights`, `silver.fighters`).
-4. Gold: metricas em `gold.event_metrics` e `gold.fighter_metrics`.
-5. ETL state: controle de sucesso e auditoria de execucao em `etl.*`.
-
-Comportamento de carga:
-
-- SQL Server usa `MERGE` por chave (insert + update), com staging table temporaria.
-- Se nao houver sucesso anterior em `etl.pipeline_control` para o `pipeline_name`, o modo e `initial_full`.
-- Com sucesso anterior, o modo e `incremental`.
-- Cada execucao registra auditoria em `etl.load_audit` com `run_id`, status, inicio/fim e mensagem.
-
-Exemplo com SQL Server via argumentos:
+Opcional: carregar apenas uma particao:
 
 ```bash
-python scripts/load_lakehouse_sqlserver.py --server "localhost\SQLEXPRESS" --database UFC_Lakehouse --dt 2026-02-08 --data-root .\data --trust-server-certificate
+python src\silver_loader.py --dt 2026-04-20 --data-root .\data
 ```
-
-Exemplo com autenticacao SQL:
-
-```bash
-python scripts/load_lakehouse_sqlserver.py --server "localhost\SQLEXPRESS" --database UFC_Lakehouse --dt 2026-02-08 --data-root .\data --user sa --password "<senha>" --trust-server-certificate
-```
-
-Configuracao central de destino:
-
-- `src/ufc_pipeline/common/lakehouse_target.py`: dataclass unica com credenciais, schemas e nomes de tabelas do SQL Server.
-- Variaveis em `.env` (`UFC_TARGET_*`) alimentam essa dataclass.
-- `UFC_TARGET_ODBC_DRIVER` e opcional para escolher o driver ODBC.
-- `UFC_TARGET_ODBC_EXTRA` permite parametros ODBC extras (ex.: `MARS_Connection=Yes`).
-
-Schemas por camada (SQL Server):
-
-- `UFC_RAW_SCHEMA` (default: `raw`)
-- `UFC_BRONZE_SCHEMA` (default: `bronze`)
-- `UFC_SILVER_SCHEMA` (default: `silver`)
-- `UFC_GOLD_SCHEMA` (default: `gold`)
-
-Observacao:
-
-- Garanta um driver ODBC do SQL Server instalado (ex.: `ODBC Driver 17 for SQL Server`).
-
-## Configuracoes importantes
-
-- `pipeline.pipeline_name`: nome logico da pipeline (default `ufc_lakehouse`)
-- `pipeline.events_lookback_days`: janela incremental de eventos concluidos (default `30` dias)
-- `pipeline.full_load_if_db_empty`: se `true`, sem sucesso anterior faz carga historica completa no `run all`
-- `UFC_PIPELINE_NAME`: nome logico da pipeline usado no loader SQL (default `ufc_lakehouse`)
-
-## Regra inicial x incremental
-
-1. `run all` (coleta): decide `full load` ou incremental pela tabela `etl.pipeline_control`.
-2. Loader SQL: tambem decide `initial_full`/`incremental` por `etl.pipeline_control` e grava auditoria em `etl.load_audit`.
-3. Para forcar uma nova carga inicial completa, limpe o estado em `etl.pipeline_control` para o pipeline.
-
-## Tabelas atuais (SQL Server)
-
-- `raw.events_json`
-- `raw.fights_json`
-- `raw.fighters_json`
-- `bronze.events_raw`
-- `bronze.fights_raw`
-- `bronze.fighters_raw`
-- `silver.events`
-- `silver.fights`
-- `silver.fighters`
-- `gold.event_metrics`
-- `gold.fighter_metrics`
-- `etl.pipeline_control`
-- `etl.load_audit`
