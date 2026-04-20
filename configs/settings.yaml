@@ -7,11 +7,44 @@ http:
   backoff_factor: 0.6
   polite_delay_seconds: ${POLITE_DELAY_SECONDS:-0.6}
   max_requests_per_minute: 80
+  workers: 4  # threads paralelas para download (lutas e lutadores)
 
 pipeline:
+  pipeline_name: "ufc_lakehouse"
   dt_format: "%Y-%m-%d"
-  write_parquet_if_available: true
+  events_lookback_days: 30
+  # Se banco estiver vazio, busca historico completo na carga inicial
+  full_load_if_db_empty: true
   # Limite opcional para testes (0 = sem limite)
   limit_events: 0
   limit_fights_per_event: 0
   limit_fighters: 0
+
+predicao:
+  # Peso de cada módulo de análise no score final (escala 1–5).
+  # Aumente um valor para dar mais influência àquela dimensão.
+  pesos:
+    # ── Alta influência (4–5) ───────────────────────────────────────────────
+    round_a_round:        4   # Volume ofensivo por round — preditor mais direto
+    troca_dano:           4   # Saldo de golpes significativos — eficiência na troca
+    declinio_etario:      4   # Correlação desempenho × fase da carreira e idade
+
+    # ── Influência moderada (3) ─────────────────────────────────────────────
+    curva_fadiga:         3   # Queda de volume R1→R3+ — relevante em lutas longas
+    indice_cardio:        3   # Score composto de condicionamento físico
+    perfil_pressao:       3   # Combinação de volume + takedowns + clinch
+    controle_solo:        3   # Grappling: takedowns, submissões, golpes no solo
+    tendencia:            3   # Momentum das últimas 5 lutas (mais recente = mais peso)
+    medias_apostas:       3   # Proxy de favorito via win rate ponderado
+    atividade_recente:    3   # Win rate das últimas 3 vs 3 anteriores (forma atual)
+    pico_round:           3   # Round com maior taxa de vitórias/finalizações
+    poder_nocaute:        3   # KO rate, knockdowns, poder de finalização
+    durabilidade:         3   # Queixo: % derrotas por KO, taxa de ir a distância
+
+    # ── Baixa influência (1–2) ──────────────────────────────────────────────
+    timing_finalizacao:   2   # Round/método de finalização (amostra pequena)
+    adaptacao_oponente:   2   # Histórico geral — sem distinguir qualidade de oponente
+    mapa_alvos:           2   # Distribuição de golpes por zona (cabeça/corpo/perna)
+    probabilidade_metodo: 2   # Cruzamento ataque vs vulnerabilidade por método
+    crescimento_intra_luta: 2 # Perfil de evolução dentro da luta (R1→R3+)
+    estilo:               1   # Classificação tática — contexto narrativo apenas

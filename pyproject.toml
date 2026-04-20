@@ -16,9 +16,10 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-parquet = [
-  "pandas>=2.1",
-  "pyarrow>=14.0",
+sqlserver = [
+  "pandas>=2.2",
+  "sqlalchemy>=2.0",
+  "pyodbc>=5.0",
 ]
 dev = [
   "pytest>=8.0",
@@ -29,7 +30,7 @@ dev = [
 ]
 
 [project.scripts]
-ufc-pipeline = "ufc_pipeline.orchestration.cli:main"
+ufc-pipeline = "ufc_pipeline.pipeline:main"
 
 [tool.setuptools]
 package-dir = {"" = "src"}
