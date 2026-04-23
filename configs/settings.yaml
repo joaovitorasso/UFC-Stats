@@ -6,12 +6,12 @@ http:
   retries: 4
   backoff_factor: 0.6
   polite_delay_seconds: ${POLITE_DELAY_SECONDS:-0.6}
-  max_requests_per_minute: 80
-  workers: 4  # threads paralelas para download (lutas e lutadores)
+  max_requests_per_minute: 150
+  workers: 8  # threads paralelas para download (lutas e lutadores)
 
 pipeline:
   events_lookback_days: 30
   # Limites opcionais para testes (0 = sem limite)
-  limit_events: 5
-  limit_fights_per_event: 5
-  limit_fighters: 5
+  limit_events: 0
+  limit_fights_per_event: 0
+  limit_fighters: 0

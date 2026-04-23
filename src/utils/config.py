@@ -7,7 +7,7 @@ from typing import Any, Dict
 import yaml
 from dotenv import load_dotenv
 
-from http_client import HttpConfig
+from utils.http_client import HttpConfig
 
 
 def _expand_env(value: Any) -> Any:

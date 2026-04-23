@@ -34,7 +34,17 @@ pip install -r requirements-sqlserver.txt
 3. Executar coleta:
 
 ```bash
-python src\pipeline.py run all
+# Carga inicial — coleta todos os eventos sem restricao de data
+python src\pipeline.py --initial
+
+# Carga incremental — respeita o lookback configurado em settings.yaml
+python src\pipeline.py --incremental
+```
+
+Opcional: forcar uma particao especifica:
+
+```bash
+python src\pipeline.py --incremental --dt 2026-04-20
 ```
 
 4. Carregar silver no SQL Server:

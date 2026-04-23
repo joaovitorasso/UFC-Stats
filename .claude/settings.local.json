@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python -c \"import utils; print\\(utils.__file__\\)\")",
+      "Bash(python -m py_compile utils/helpers.py utils/banco.py utils/config.py utils/http_client.py utils/logger.py utils/__init__.py)",
+      "Bash(python -m py_compile layers/bronze/events.py layers/bronze/fights.py layers/bronze/fighters.py)",
+      "Bash(python -m py_compile layers/silver/db.py layers/silver/transformers.py layers/silver/dimensions.py layers/silver/initial.py layers/silver/incremental.py)",
+      "Bash(python -m py_compile orchestration/orchestrator.py orchestration/initial_load.py orchestration/incremental_load.py pipeline.py silver_loader.py)",
+      "Bash(python -c ':*)"
+    ]
+  }
+}
